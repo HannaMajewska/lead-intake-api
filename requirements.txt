@@ -1,0 +1,9 @@
+fastapi
+uvicorn[standard]
+pydantic[email]
+pydantic-settings
+python-json-logger
+google-api-python-client
+google-auth
+pytest
+httpx
