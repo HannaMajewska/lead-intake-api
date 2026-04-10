@@ -81,3 +81,4 @@ logs/
 
 # Local tooling
 *.local
+*.bak
