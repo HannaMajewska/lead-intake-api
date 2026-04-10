@@ -155,7 +155,7 @@ Suggested filenames are listed under each subsection so you can capture one scre
 
 - **Full page** — header, **Find leads** filter card, **Leads** table, and (when open) the **New lead** panel or detail dialog.
 
-<img width="1920" height="952" alt="Screenshot 2026-04-10 at 20 36 19" src="https://github.com/user-attachments/assets/5b7cb66b-6f1f-40e9-a3ff-88ed0e6de23d" />
+<img width="1900" height="963" alt="Screenshot 2026-04-11 at 01 20 51" src="https://github.com/user-attachments/assets/59b194e3-00c8-4ff3-913a-f7bf7940cb27" />
 
 ---
 
@@ -165,7 +165,8 @@ Suggested filenames are listed under each subsection so you can capture one scre
 - **+ Add lead** — toggles the **New lead** form panel (hidden until you click).
 - **API docs** — opens FastAPI Swagger (`/docs`) in a new tab.
 
-<img width="1920" height="126" alt="Screenshot 2026-04-10 at 20 38 21" src="https://github.com/user-attachments/assets/958a92bf-5f40-420b-a96f-95ee9238b5dd" />
+<img width="1900" height="116" alt="Screenshot 2026-04-11 at 01 21 44" src="https://github.com/user-attachments/assets/03c5cb07-a707-4b2e-ba3b-1bc906247036" />
+
 
 
 ---
@@ -178,7 +179,8 @@ Suggested filenames are listed under each subsection so you can capture one scre
 - **Duplicates** — if the email or phone already exists in the sheet, the API returns **409**; the UI shows a toast with the error message (duplicates never get a new row).
 - **Submit lead** — `POST /api/leads`; on success, a toast shows the new `lead_id` and the table refreshes.
 
-<img width="1902" height="355" alt="Screenshot 2026-04-10 at 20 39 26" src="https://github.com/user-attachments/assets/9ec5cb1a-859d-4510-8fcb-b897348e048b" />
+<img width="1900" height="962" alt="Screenshot 2026-04-11 at 01 23 33" src="https://github.com/user-attachments/assets/8858634a-0755-4c98-ba83-f92bb7c9bfbb" />
+
 
 
 ---
@@ -196,7 +198,8 @@ Short help text explains that **filters hit the server** (Google Sheets via the 
 - **Status line** (under the chips) — shows loading state, then text such as how many leads are shown and the active sort (e.g. “Received: newest first”).
 - **Reset filters** — clears source, status, date presets (back to **All time**), and restores default table sort (**Received**, newest first).
 
-<img width="1902" height="306" alt="Screenshot 2026-04-10 at 20 40 03" src="https://github.com/user-attachments/assets/e8b2314e-8c50-4085-956f-78fc09d3c1ae" />
+<img width="1900" height="261" alt="Screenshot 2026-04-11 at 01 24 07" src="https://github.com/user-attachments/assets/d407f1c0-71d9-4171-9363-8aa85693bd93" />
+
 
 
 ---
@@ -208,7 +211,8 @@ Short help text explains that **filters hit the server** (Google Sheets via the 
 - **Sortable headers** — click **Received**, **Name**, **Source**, or **Status** to sort. The active column shows **up** or **down** arrows; inactive columns show a faint sort hint (Unicode U+2195 in the UI). First click on **Received** keeps **newest first** by default; text columns default to A→Z, then toggle direction on repeated clicks.
 - **View** — loads the row from `GET /api/leads/{lead_id}` and opens the detail modal (not only the visible row snapshot).
 
-<img width="1902" height="378" alt="Screenshot 2026-04-10 at 20 40 49" src="https://github.com/user-attachments/assets/32b55736-719d-490d-aba1-d0e25a31e81f" />
+<img width="1900" height="609" alt="Screenshot 2026-04-11 at 01 24 52" src="https://github.com/user-attachments/assets/6859bdac-90e0-4bcc-b0a0-784d25376c0c" />
+
 
 
 ---
@@ -219,7 +223,8 @@ Short help text explains that **filters hit the server** (Google Sheets via the 
 - **Resend to CRM** — calls `POST /api/leads/{lead_id}/resend-crm`; on success, sheet columns **crm_status** / **crm_record_id** update and the table refreshes. If CRM sync is disabled in `.env`, the API returns **400** (`CRM_SYNC_DISABLED`) and the toast shows the message.
 - **Close** — × button or Escape (native `<dialog>` behavior).
 
-<img width="667" height="549" alt="Screenshot 2026-04-10 at 20 42 07" src="https://github.com/user-attachments/assets/a03cd72c-f5cc-4bc1-8178-bc5eb03678e4" />
+<img width="1900" height="952" alt="Screenshot 2026-04-11 at 01 25 25" src="https://github.com/user-attachments/assets/6f210047-43c1-4e12-a0f2-8ff0f8757417" />
+
 
 
 ---
@@ -228,6 +233,9 @@ Short help text explains that **filters hit the server** (Google Sheets via the 
 
 - Bottom-right messages for **success** (e.g. lead saved, resent to CRM), **errors** (validation, duplicate, network, CRM disabled), and general info.
 - They auto-hide after a few seconds.
+
+<img width="1900" height="952" alt="Screenshot 2026-04-11 at 01 26 34" src="https://github.com/user-attachments/assets/d6c93a2f-7cb0-431c-842e-e1cbff4b6a86" />
+
 
 ---
 
