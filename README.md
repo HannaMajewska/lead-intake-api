@@ -155,7 +155,7 @@ Suggested filenames are listed under each subsection so you can capture one scre
 
 - **Full page** — header, **Find leads** filter card, **Leads** table, and (when open) the **New lead** panel or detail dialog.
 
-![Lead operations — full dashboard](docs/screenshots/ui-00-dashboard-overview.png)
+<img width="1920" height="952" alt="Screenshot 2026-04-10 at 20 36 19" src="https://github.com/user-attachments/assets/5b7cb66b-6f1f-40e9-a3ff-88ed0e6de23d" />
 
 ---
 
@@ -165,7 +165,8 @@ Suggested filenames are listed under each subsection so you can capture one scre
 - **+ Add lead** — toggles the **New lead** form panel (hidden until you click).
 - **API docs** — opens FastAPI Swagger (`/docs`) in a new tab.
 
-![Header: title, Add lead, API docs](docs/screenshots/ui-01-header.png)
+<img width="1920" height="126" alt="Screenshot 2026-04-10 at 20 38 21" src="https://github.com/user-attachments/assets/958a92bf-5f40-420b-a96f-95ee9238b5dd" />
+
 
 ---
 
@@ -177,7 +178,8 @@ Suggested filenames are listed under each subsection so you can capture one scre
 - **Duplicates** — if the email or phone already exists in the sheet, the API returns **409**; the UI shows a toast with the error message (duplicates never get a new row).
 - **Submit lead** — `POST /api/leads`; on success, a toast shows the new `lead_id` and the table refreshes.
 
-![New lead form expanded](docs/screenshots/ui-02-new-lead-form.png)
+<img width="1902" height="355" alt="Screenshot 2026-04-10 at 20 39 26" src="https://github.com/user-attachments/assets/9ec5cb1a-859d-4510-8fcb-b897348e048b" />
+
 
 ---
 
@@ -194,7 +196,8 @@ Short help text explains that **filters hit the server** (Google Sheets via the 
 - **Status line** (under the chips) — shows loading state, then text such as how many leads are shown and the active sort (e.g. “Received: newest first”).
 - **Reset filters** — clears source, status, date presets (back to **All time**), and restores default table sort (**Received**, newest first).
 
-![Find leads: source, status, date chips, reset](docs/screenshots/ui-03-filters.png)
+<img width="1902" height="306" alt="Screenshot 2026-04-10 at 20 40 03" src="https://github.com/user-attachments/assets/e8b2314e-8c50-4085-956f-78fc09d3c1ae" />
+
 
 ---
 
@@ -205,7 +208,8 @@ Short help text explains that **filters hit the server** (Google Sheets via the 
 - **Sortable headers** — click **Received**, **Name**, **Source**, or **Status** to sort. The active column shows **up** or **down** arrows; inactive columns show a faint sort hint (Unicode U+2195 in the UI). First click on **Received** keeps **newest first** by default; text columns default to A→Z, then toggle direction on repeated clicks.
 - **View** — loads the row from `GET /api/leads/{lead_id}` and opens the detail modal (not only the visible row snapshot).
 
-![Leads table with sortable headers](docs/screenshots/ui-04-table.png)
+<img width="1902" height="378" alt="Screenshot 2026-04-10 at 20 40 49" src="https://github.com/user-attachments/assets/32b55736-719d-490d-aba1-d0e25a31e81f" />
+
 
 ---
 
@@ -215,7 +219,8 @@ Short help text explains that **filters hit the server** (Google Sheets via the 
 - **Resend to CRM** — calls `POST /api/leads/{lead_id}/resend-crm`; on success, sheet columns **crm_status** / **crm_record_id** update and the table refreshes. If CRM sync is disabled in `.env`, the API returns **400** (`CRM_SYNC_DISABLED`) and the toast shows the message.
 - **Close** — × button or Escape (native `<dialog>` behavior).
 
-![Lead detail and Resend to CRM](docs/screenshots/ui-05-detail-modal.png)
+<img width="667" height="549" alt="Screenshot 2026-04-10 at 20 42 07" src="https://github.com/user-attachments/assets/a03cd72c-f5cc-4bc1-8178-bc5eb03678e4" />
+
 
 ---
 
@@ -223,10 +228,6 @@ Short help text explains that **filters hit the server** (Google Sheets via the 
 
 - Bottom-right messages for **success** (e.g. lead saved, resent to CRM), **errors** (validation, duplicate, network, CRM disabled), and general info.
 - They auto-hide after a few seconds.
-
-*Optional figure:* capture a toast after a successful submit or a duplicate error.
-
-![Toast: success or error example](docs/screenshots/ui-06-toast.png)
 
 ---
 
