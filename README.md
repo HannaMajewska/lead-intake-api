@@ -8,10 +8,10 @@ A FastAPI backend that accepts lead payloads as JSON, validates and normalizes f
 
 | Area | Behavior |
 |------|----------|
-| **HTTP** | `POST /api/leads` — create a lead; `GET /api/leads` — list with optional filters; `GET /api/leads/{lead_id}` — detail; `POST /api/leads/{lead_id}/resend-crm` — push CRM columns again; `GET /health` — liveness; `GET /` — web dashboard |
+| **HTTP** | `POST /api/leads` — create; `GET /api/leads` — list (filters); `GET /api/leads/{lead_id}` — detail; `DELETE /api/leads/{lead_id}` — remove sheet row; `POST /api/leads/bulk-delete` — JSON `{ "lead_ids": [...] }` removes matching rows; `POST /api/leads/{lead_id}/resend-crm` — refresh CRM columns; `GET /health`; `GET /` — web dashboard |
 | **Validation** | Required: `name`, `email`, `phone`, `source`. Optional: `message`, `campaign`, `city`, `created_at` |
 | **Normalization** | Email, phone, slug-like `source` / `campaign`, UTC datetimes, trimmed text |
-| **Google Sheets** | Header row auto-initialization (columns A–K), append one row per lead, read/update for dashboard and resend |
+| **Google Sheets** | Header row auto-initialization (11 columns A–K), append one row per lead, read/update for dashboard, resend, and **row deletion** (single or bulk) |
 | **CRM** | Optional via `ENABLE_CRM_SYNC`; only a **mock** provider is implemented |
 | **Duplicates** | `409` if the sheet already contains the same email or phone (after normalization) |
 | **Errors** | Consistent JSON: `status`, `error_code`, `message` |
@@ -42,7 +42,7 @@ A FastAPI backend that accepts lead payloads as JSON, validates and normalizes f
 lead_intake_api/
 ├── app/
 │   ├── api/
-│   │   └── leads.py          # REST: create, list, detail, resend-crm
+│   │   └── leads.py          # REST: create, list, detail, delete, bulk-delete, resend-crm
 │   ├── adapters/
 │   │   ├── crm.py            # CRM adapters (mock)
 │   │   └── sheets.py         # Google Sheets read/append/update
@@ -141,19 +141,17 @@ uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 
 ## Web interface: Lead operations
 
-The dashboard is a single-page console for operators. It reads and filters data through `GET /api/leads`, creates leads with `POST /api/leads`, opens a row with `GET /api/leads/{lead_id}`, and can **Resend to CRM** via `POST /api/leads/{lead_id}/resend-crm` (requires `ENABLE_CRM_SYNC=true`).
+The dashboard is a single-page console for operators. It reads and filters data through `GET /api/leads`, creates leads with `POST /api/leads`, opens a row with `GET /api/leads/{lead_id}`, deletes rows with `DELETE /api/leads/{lead_id}` or `POST /api/leads/bulk-delete`, and can **Resend to CRM** via `POST /api/leads/{lead_id}/resend-crm` (requires `ENABLE_CRM_SYNC=true`).
 
-### Screenshots (optional)
+### Screenshots
 
-You can keep screenshots next to the repo or in a `docs/screenshots/` folder. Replace the paths in the `![...](...)` lines below with your own files, or delete the image lines if you do not need figures.
-
-Suggested filenames are listed under each subsection so you can capture one screen per topic.
+Figures in the subsections below illustrate layout, header, new-lead flow, filters, the table, lead detail, and notifications.
 
 ---
 
 ### Overall layout
 
-- **Full page** — header, **Find leads** filter card, **Leads** table, and (when open) the **New lead** panel or detail dialog.
+- **Full page** — header, **Find leads** filters, **Leads** table (row selection and bulk delete), and (when open) the **New lead** dialog or lead detail dialog.
 
 <img width="1900" height="963" alt="Screenshot 2026-04-11 at 01 20 51" src="https://github.com/user-attachments/assets/59b194e3-00c8-4ff3-913a-f7bf7940cb27" />
 
@@ -162,7 +160,7 @@ Suggested filenames are listed under each subsection so you can capture one scre
 ### Header (top bar)
 
 - **Title** — “Lead operations” and the tagline (sheet-backed intake, CRM, team console).
-- **+ Add lead** — toggles the **New lead** form panel (hidden until you click).
+- **+ Add lead** — opens the **New lead** dialog (modal).
 - **API docs** — opens FastAPI Swagger (`/docs`) in a new tab.
 
 <img width="1900" height="116" alt="Screenshot 2026-04-11 at 01 21 44" src="https://github.com/user-attachments/assets/03c5cb07-a707-4b2e-ba3b-1bc906247036" />
@@ -173,7 +171,7 @@ Suggested filenames are listed under each subsection so you can capture one scre
 
 ### New lead form
 
-- Opens when you click **+ Add lead**; **Cancel** or submit hides it again after a successful create.
+- Opens in a modal dialog when you click **+ Add lead**; **Cancel**, **×**, or Escape closes without saving; a successful **Submit lead** resets the form and closes the dialog.
 - **Required:** Name, Email, Phone, Source (same rules as the API).
 - **Optional:** Campaign, City, Message.
 - **Duplicates** — if the email or phone already exists in the sheet, the API returns **409**; the UI shows a toast with the error message (duplicates never get a new row).
@@ -207,8 +205,9 @@ Short help text explains that **filters hit the server** (Google Sheets via the 
 ### Leads table
 
 - **Leads (N)** — count after filters; **Refresh** reloads from the server with the same filter parameters.
-- **Columns:** **Received**, **Name**, **Source** (monospace chip), **Status** (badge: synced / pending / error styling), **View**.
-- **Sortable headers** — click **Received**, **Name**, **Source**, or **Status** to sort. The active column shows **up** or **down** arrows; inactive columns show a faint sort hint (Unicode U+2195 in the UI). First click on **Received** keeps **newest first** by default; text columns default to A→Z, then toggle direction on repeated clicks.
+- **Selection** — checkbox per row and **Select all visible** in the header. When at least one row is selected, a **bulk bar** appears: **Delete selected** (`POST /api/leads/bulk-delete`) and **Clear selection**.
+- **Columns:** checkbox, **Received**, **Name**, **Email**, **Source** (monospace chip), **Status** (badge: synced / pending / error styling), **Action** (**View** opens the detail modal; **Delete** removes that row via `DELETE /api/leads/{lead_id}` after confirmation in the browser).
+- **Sortable headers** — click **Received**, **Name**, **Email**, **Source**, or **Status** to sort. The active column shows **up** or **down** arrows; inactive columns show a faint sort hint (Unicode U+2195 in the UI). First click on **Received** keeps **newest first** by default; text columns default to A→Z, then toggle direction on repeated clicks.
 - **View** — loads the row from `GET /api/leads/{lead_id}` and opens the detail modal (not only the visible row snapshot).
 
 <img width="1900" height="609" alt="Screenshot 2026-04-11 at 01 24 52" src="https://github.com/user-attachments/assets/6859bdac-90e0-4bcc-b0a0-784d25376c0c" />
@@ -221,6 +220,7 @@ Short help text explains that **filters hit the server** (Google Sheets via the 
 
 - Full row fields: IDs, timestamps, contact info, source/campaign/city/message, CRM record id, and a **Status** badge.
 - **Resend to CRM** — calls `POST /api/leads/{lead_id}/resend-crm`; on success, sheet columns **crm_status** / **crm_record_id** update and the table refreshes. If CRM sync is disabled in `.env`, the API returns **400** (`CRM_SYNC_DISABLED`) and the toast shows the message.
+- **Delete lead** — closes the dialog, then asks for browser confirmation and calls `DELETE /api/leads/{lead_id}`; on success the sheet row is removed and the table refreshes.
 - **Close** — × button or Escape (native `<dialog>` behavior).
 
 <img width="1900" height="952" alt="Screenshot 2026-04-11 at 01 25 25" src="https://github.com/user-attachments/assets/6f210047-43c1-4e12-a0f2-8ff0f8757417" />
@@ -231,8 +231,8 @@ Short help text explains that **filters hit the server** (Google Sheets via the 
 
 ### Toasts (notifications)
 
-- Bottom-right messages for **success** (e.g. lead saved, resent to CRM), **errors** (validation, duplicate, network, CRM disabled), and general info.
-- They auto-hide after a few seconds.
+- Fixed **bottom-right**: one glass **toast host**; the message line uses a slim **type accent** (info / success / error) for saves, resend, single and bulk deletes, validation, duplicates, network failures, CRM disabled, and other API errors.
+- Auto-hide after about **five seconds**.
 
 <img width="1900" height="952" alt="Screenshot 2026-04-11 at 01 26 34" src="https://github.com/user-attachments/assets/d6c93a2f-7cb0-431c-842e-e1cbff4b6a86" />
 
@@ -298,6 +298,38 @@ The HTTP `message` field is always `"Lead processed successfully"` in the curren
 | `crm_status` | Exact sheet value, e.g. `skipped`, `created` |
 | `date_from`, `date_to` | ISO calendar dates (`YYYY-MM-DD`), interpreted in UTC day bounds on the server |
 
+### Delete one lead
+
+`DELETE /api/leads/{lead_id}` — removes the spreadsheet row for that id.
+
+```json
+{
+  "status": "success",
+  "lead_id": "lead_20260409121530_a1b2c3",
+  "message": "Lead deleted from the sheet."
+}
+```
+
+### Bulk delete
+
+`POST /api/leads/bulk-delete` with JSON body:
+
+```json
+{
+  "lead_ids": ["lead_20260409121530_a1b2c3", "lead_20260409121600_d4e5f6"]
+}
+```
+
+Duplicate ids in the list are ignored; each matching row is deleted once. If **no** ids resolve to sheet rows, the API returns **404** with `LEAD_NOT_FOUND`. On success:
+
+```json
+{
+  "status": "success",
+  "deleted": 2,
+  "message": "Deleted 2 lead(s) from the sheet."
+}
+```
+
 ---
 
 ## CRM mode (mock)
@@ -343,6 +375,28 @@ With `ENABLE_CRM_SYNC=true`, any `CRM_PROVIDER` other than `mock` returns `CRM_P
 
 (or the phone variant.)
 
+**Not found (404)** — missing `lead_id` on detail, resend, delete, or bulk-delete when no rows match:
+
+```json
+{
+  "status": "error",
+  "error_code": "LEAD_NOT_FOUND",
+  "message": "Lead 'lead_x' was not found."
+}
+```
+
+(Bulk delete uses the message *No matching leads were found to delete.* when the list matches nothing.)
+
+**CRM resend disabled (400)**
+
+```json
+{
+  "status": "error",
+  "error_code": "CRM_SYNC_DISABLED",
+  "message": "CRM sync is disabled. Set ENABLE_CRM_SYNC=true to resend leads."
+}
+```
+
 **Google Sheets** — e.g. bad tab name (`GOOGLE_SHEETS_RANGE_ERROR`), permission denied (`GOOGLE_SHEETS_PERMISSION_DENIED`), not found (`GOOGLE_SHEETS_NOT_FOUND`). Check `error_code` in the response body.
 
 ---
@@ -357,7 +411,7 @@ pytest tests/test_lead_processor.py -v
 pytest tests/test_dashboard_api.py -v
 ```
 
-Coverage includes: happy-path API, validation errors, processor (including CRM and duplicates), dashboard and list/resend routes, and parts of Sheets / app error handling.
+Coverage includes: happy-path API, validation errors, processor (including CRM and duplicates), dashboard routes (list, detail, resend, delete, bulk-delete), and parts of Sheets / app error handling.
 
 ---
 
