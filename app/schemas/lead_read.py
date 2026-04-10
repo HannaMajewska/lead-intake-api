@@ -27,3 +27,19 @@ class ResendCrmResponse(BaseModel):
     crm_record_id: str
     crm_status: str
     message: str
+
+
+class DeleteLeadResponse(BaseModel):
+    status: str
+    lead_id: str
+    message: str
+
+
+class BulkDeleteLeadsRequest(BaseModel):
+    lead_ids: list[str] = Field(min_length=1)
+
+
+class BulkDeleteLeadsResponse(BaseModel):
+    status: str
+    deleted: int
+    message: str
