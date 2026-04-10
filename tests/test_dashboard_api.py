@@ -59,6 +59,15 @@ class FakeSheets:
         row[9] = crm_status
         row[10] = crm_record_id
 
+    def delete_sheet_rows(self, sheet_rows_1based: list[int]) -> None:
+        zero_based = sorted(
+            {r - 1 for r in sheet_rows_1based if r >= 2},
+            reverse=True,
+        )
+        for idx in zero_based:
+            if 0 <= idx < len(self.rows):
+                del self.rows[idx]
+
 
 def sample_rows() -> list[list[str]]:
     return [
@@ -224,5 +233,41 @@ def test_resend_crm_when_disabled(client: TestClient) -> None:
         r = client.post("/api/leads/lead_a/resend-crm")
         assert r.status_code == 400
         assert r.json()["error_code"] == "CRM_SYNC_DISABLED"
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_delete_lead(client: TestClient) -> None:
+    settings = build_settings()
+    fake = FakeSheets(sample_rows())
+    app.dependency_overrides[get_lead_read_service] = lambda: LeadReadService(
+        settings=settings,
+        sheets_adapter=fake,  # type: ignore[arg-type]
+    )
+    try:
+        r = client.delete("/api/leads/lead_a")
+        assert r.status_code == 200
+        assert r.json()["lead_id"] == "lead_a"
+        assert len(fake.rows) == 2
+        assert fake.rows[1][0] == "lead_b"
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_bulk_delete_leads(client: TestClient) -> None:
+    settings = build_settings()
+    fake = FakeSheets(sample_rows())
+    app.dependency_overrides[get_lead_read_service] = lambda: LeadReadService(
+        settings=settings,
+        sheets_adapter=fake,  # type: ignore[arg-type]
+    )
+    try:
+        r = client.post(
+            "/api/leads/bulk-delete",
+            json={"lead_ids": ["lead_a", "lead_b"]},
+        )
+        assert r.status_code == 200
+        assert r.json()["deleted"] == 2
+        assert len(fake.rows) == 1
     finally:
         app.dependency_overrides.clear()

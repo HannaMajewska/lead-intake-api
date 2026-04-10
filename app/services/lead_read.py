@@ -4,7 +4,13 @@ from app.adapters.crm import build_crm_adapter
 from app.adapters.sheets import GoogleSheetsAdapter
 from app.config import Settings
 from app.exceptions import AppError
-from app.schemas.lead_read import LeadListResponse, LeadOut, ResendCrmResponse
+from app.schemas.lead_read import (
+    BulkDeleteLeadsResponse,
+    DeleteLeadResponse,
+    LeadListResponse,
+    LeadOut,
+    ResendCrmResponse,
+)
 from app.utils.normalize import normalize_slugish
 
 
@@ -166,4 +172,40 @@ class LeadReadService:
             crm_record_id=crm_result.record_id,
             crm_status=crm_result.status,
             message="Lead resent to CRM successfully.",
+        )
+
+    def delete_lead(self, lead_id: str) -> DeleteLeadResponse:
+        sheet_row = self.sheets.find_sheet_row_by_lead_id(lead_id)
+        if sheet_row is None:
+            raise AppError(
+                status_code=404,
+                error_code="LEAD_NOT_FOUND",
+                message=f"Lead '{lead_id}' was not found.",
+            )
+        self.sheets.delete_sheet_rows([sheet_row])
+        return DeleteLeadResponse(
+            status="success",
+            lead_id=lead_id,
+            message="Lead deleted from the sheet.",
+        )
+
+    def delete_leads_bulk(self, lead_ids: list[str]) -> BulkDeleteLeadsResponse:
+        unique_ids = list(dict.fromkeys(lead_ids))
+        rows: set[int] = set()
+        for lid in unique_ids:
+            r = self.sheets.find_sheet_row_by_lead_id(lid)
+            if r is not None:
+                rows.add(r)
+        if not rows:
+            raise AppError(
+                status_code=404,
+                error_code="LEAD_NOT_FOUND",
+                message="No matching leads were found to delete.",
+            )
+        self.sheets.delete_sheet_rows(list(rows))
+        n = len(rows)
+        return BulkDeleteLeadsResponse(
+            status="success",
+            deleted=n,
+            message=f"Deleted {n} lead(s) from the sheet.",
         )
