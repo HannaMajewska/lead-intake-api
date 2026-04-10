@@ -1,6 +1,9 @@
+from pathlib import Path
+
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from app.api.leads import router as leads_router
 from app.config import get_settings
@@ -10,8 +13,16 @@ from app.utils.logging import setup_logging
 setup_logging()
 settings = get_settings()
 
+STATIC_DIR = Path(__file__).resolve().parent / "static"
+
 app = FastAPI(title=settings.app_name)
 app.include_router(leads_router)
+app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+
+
+@app.get("/")
+def dashboard() -> FileResponse:
+    return FileResponse(STATIC_DIR / "index.html")
 
 
 @app.get("/health")

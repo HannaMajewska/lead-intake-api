@@ -168,6 +168,93 @@ class GoogleSheetsAdapter:
                 message="Google credentials file was not found.",
             ) from exc
 
+    def find_sheet_row_by_lead_id(self, lead_id: str) -> int | None:
+        rows = self.get_all_rows()
+        for sheet_row, row in enumerate(rows[1:], start=2):
+            if row and row[0] == lead_id:
+                return sheet_row
+        return None
+
+    def get_row_at(self, sheet_row: int) -> list[str]:
+        try:
+            self.ensure_header()
+
+            service = self._build_service()
+            range_str = f"{self.settings.google_sheet_name}!A{sheet_row}:K{sheet_row}"
+
+            response = (
+                service.spreadsheets()
+                .values()
+                .get(
+                    spreadsheetId=self.settings.google_sheet_id,
+                    range=range_str,
+                )
+                .execute()
+            )
+
+            values = response.get("values", [])
+            if not values:
+                return []
+
+            return values[0]
+
+        except HttpError as exc:
+            raise self._map_http_error(exc, action="read_row") from exc
+        except FileNotFoundError as exc:
+            logger.exception(
+                "google_credentials_file_not_found",
+                extra={"credentials_path": self.settings.google_credentials_path},
+            )
+            raise AppError(
+                status_code=500,
+                error_code="GOOGLE_CREDENTIALS_FILE_NOT_FOUND",
+                message="Google credentials file was not found.",
+            ) from exc
+
+    def update_crm_columns(
+        self,
+        *,
+        sheet_row: int,
+        crm_status: str,
+        crm_record_id: str,
+    ) -> None:
+        try:
+            self.ensure_header()
+
+            service = self._build_service()
+            range_str = f"{self.settings.google_sheet_name}!J{sheet_row}:K{sheet_row}"
+            body = {"values": [[crm_status, crm_record_id]]}
+
+            (
+                service.spreadsheets()
+                .values()
+                .update(
+                    spreadsheetId=self.settings.google_sheet_id,
+                    range=range_str,
+                    valueInputOption="USER_ENTERED",
+                    body=body,
+                )
+                .execute()
+            )
+
+            logger.info(
+                "sheets_crm_columns_updated",
+                extra={"sheet_row": sheet_row, "crm_status": crm_status},
+            )
+
+        except HttpError as exc:
+            raise self._map_http_error(exc, action="update_crm") from exc
+        except FileNotFoundError as exc:
+            logger.exception(
+                "google_credentials_file_not_found",
+                extra={"credentials_path": self.settings.google_credentials_path},
+            )
+            raise AppError(
+                status_code=500,
+                error_code="GOOGLE_CREDENTIALS_FILE_NOT_FOUND",
+                message="Google credentials file was not found.",
+            ) from exc
+
     def append_lead_row(self, row: list[str]) -> SheetsAppendResult:
         try:
             self.ensure_header()

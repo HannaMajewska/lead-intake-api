@@ -1,6 +1,6 @@
 # Lead Intake API
 
-A FastAPI backend that accepts lead payloads as JSON, validates and normalizes fields, appends a row to Google Sheets, and optionally invokes a CRM adapter (currently **mock only**). Responses are JSON with explicit status and error codes.
+A FastAPI backend that accepts lead payloads as JSON, validates and normalizes fields, appends a row to Google Sheets, and optionally invokes a CRM adapter (currently **mock only**). It also serves a small **Lead operations** web console at `/` for browsing and managing rows without using `curl`. Responses are JSON with explicit status and error codes.
 
 ---
 
@@ -8,10 +8,10 @@ A FastAPI backend that accepts lead payloads as JSON, validates and normalizes f
 
 | Area | Behavior |
 |------|----------|
-| **HTTP** | `POST /api/leads` — create a lead; `GET /health` — liveness |
+| **HTTP** | `POST /api/leads` — create a lead; `GET /api/leads` — list with optional filters; `GET /api/leads/{lead_id}` — detail; `POST /api/leads/{lead_id}/resend-crm` — push CRM columns again; `GET /health` — liveness; `GET /` — web dashboard |
 | **Validation** | Required: `name`, `email`, `phone`, `source`. Optional: `message`, `campaign`, `city`, `created_at` |
 | **Normalization** | Email, phone, slug-like `source` / `campaign`, UTC datetimes, trimmed text |
-| **Google Sheets** | Header row auto-initialization (columns A–K), append one row per lead |
+| **Google Sheets** | Header row auto-initialization (columns A–K), append one row per lead, read/update for dashboard and resend |
 | **CRM** | Optional via `ENABLE_CRM_SYNC`; only a **mock** provider is implemented |
 | **Duplicates** | `409` if the sheet already contains the same email or phone (after normalization) |
 | **Errors** | Consistent JSON: `status`, `error_code`, `message` |
@@ -31,6 +31,7 @@ A FastAPI backend that accepts lead payloads as JSON, validates and normalizes f
 - Python 3.12+
 - FastAPI, Pydantic, Uvicorn
 - Google Sheets API (service account)
+- Static dashboard: HTML, CSS, vanilla JS (`app/static/`)
 - Pytest, HTTPX (tests)
 
 ---
@@ -41,27 +42,31 @@ A FastAPI backend that accepts lead payloads as JSON, validates and normalizes f
 lead_intake_api/
 ├── app/
 │   ├── api/
-│   │   └── leads.py          # POST /api/leads
+│   │   └── leads.py          # REST: create, list, detail, resend-crm
 │   ├── adapters/
 │   │   ├── crm.py            # CRM adapters (mock)
-│   │   └── sheets.py         # Google Sheets
+│   │   └── sheets.py         # Google Sheets read/append/update
 │   ├── schemas/
 │   │   ├── lead.py           # LeadCreate
+│   │   ├── lead_read.py      # list/detail/resend responses
 │   │   └── response.py
 │   ├── services/
-│   │   └── lead_processor.py # normalize → CRM → Sheets
+│   │   ├── lead_processor.py # normalize → CRM → Sheets (create)
+│   │   └── lead_read.py      # list filters, resend orchestration
+│   ├── static/               # dashboard UI (served at /static/, / → index.html)
 │   ├── utils/
-│   │   ├── ids.py            # lead_id
+│   │   ├── ids.py
 │   │   ├── logging.py
 │   │   └── normalize.py
 │   ├── config.py
 │   ├── exceptions.py
-│   └── main.py               # FastAPI, /health, error handlers
+│   └── main.py               # FastAPI, static mount, /health
 ├── credentials/              # service account JSON (not committed)
 ├── tests/
 │   ├── conftest.py
 │   ├── test_api_leads.py
 │   ├── test_api_errors.py
+│   ├── test_dashboard_api.py
 │   ├── test_lead_processor.py
 │   └── test_sheets_adapter.py
 ├── .env.example
@@ -128,8 +133,100 @@ From the project root:
 uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
+- **Lead operations (dashboard):** `http://127.0.0.1:8000/`
 - OpenAPI UI: `http://127.0.0.1:8000/docs`
 - Health: `http://127.0.0.1:8000/health`
+
+---
+
+## Web interface: Lead operations
+
+The dashboard is a single-page console for operators. It reads and filters data through `GET /api/leads`, creates leads with `POST /api/leads`, opens a row with `GET /api/leads/{lead_id}`, and can **Resend to CRM** via `POST /api/leads/{lead_id}/resend-crm` (requires `ENABLE_CRM_SYNC=true`).
+
+### Screenshots (optional)
+
+You can keep screenshots next to the repo or in a `docs/screenshots/` folder. Replace the paths in the `![...](...)` lines below with your own files, or delete the image lines if you do not need figures.
+
+Suggested filenames are listed under each subsection so you can capture one screen per topic.
+
+---
+
+### Overall layout
+
+- **Full page** — header, **Find leads** filter card, **Leads** table, and (when open) the **New lead** panel or detail dialog.
+
+![Lead operations — full dashboard](docs/screenshots/ui-00-dashboard-overview.png)
+
+---
+
+### Header (top bar)
+
+- **Title** — “Lead operations” and the tagline (sheet-backed intake, CRM, team console).
+- **+ Add lead** — toggles the **New lead** form panel (hidden until you click).
+- **API docs** — opens FastAPI Swagger (`/docs`) in a new tab.
+
+![Header: title, Add lead, API docs](docs/screenshots/ui-01-header.png)
+
+---
+
+### New lead form
+
+- Opens when you click **+ Add lead**; **Cancel** or submit hides it again after a successful create.
+- **Required:** Name, Email, Phone, Source (same rules as the API).
+- **Optional:** Campaign, City, Message.
+- **Duplicates** — if the email or phone already exists in the sheet, the API returns **409**; the UI shows a toast with the error message (duplicates never get a new row).
+- **Submit lead** — `POST /api/leads`; on success, a toast shows the new `lead_id` and the table refreshes.
+
+![New lead form expanded](docs/screenshots/ui-02-new-lead-form.png)
+
+---
+
+### Find leads (filters)
+
+Short help text explains that **filters hit the server** (Google Sheets via the API), while **column sorting** in the table is instant on the rows already loaded in the browser.
+
+- **Source** — search-style field; filters by normalized source slug (same normalization as on create). Updates run automatically after you pause typing (debounced).
+- **CRM status** — `All statuses`, **Pending sync (skipped)**, **In CRM (created)**, **Error**. Changing the dropdown refetches immediately.
+- **Received (date)** — preset chips:
+  - **All time** — no date query parameters.
+  - **Last 7 days** / **Last 30 days** — sets `date_from` / `date_to` to a rolling window in the **local** calendar.
+  - **Custom range…** — shows **From** and **To** date pickers; edits also refetch.
+- **Status line** (under the chips) — shows loading state, then text such as how many leads are shown and the active sort (e.g. “Received: newest first”).
+- **Reset filters** — clears source, status, date presets (back to **All time**), and restores default table sort (**Received**, newest first).
+
+![Find leads: source, status, date chips, reset](docs/screenshots/ui-03-filters.png)
+
+---
+
+### Leads table
+
+- **Leads (N)** — count after filters; **Refresh** reloads from the server with the same filter parameters.
+- **Columns:** **Received**, **Name**, **Source** (monospace chip), **Status** (badge: synced / pending / error styling), **View**.
+- **Sortable headers** — click **Received**, **Name**, **Source**, or **Status** to sort. The active column shows **up** or **down** arrows; inactive columns show a faint sort hint (Unicode U+2195 in the UI). First click on **Received** keeps **newest first** by default; text columns default to A→Z, then toggle direction on repeated clicks.
+- **View** — loads the row from `GET /api/leads/{lead_id}` and opens the detail modal (not only the visible row snapshot).
+
+![Leads table with sortable headers](docs/screenshots/ui-04-table.png)
+
+---
+
+### Lead detail modal
+
+- Full row fields: IDs, timestamps, contact info, source/campaign/city/message, CRM record id, and a **Status** badge.
+- **Resend to CRM** — calls `POST /api/leads/{lead_id}/resend-crm`; on success, sheet columns **crm_status** / **crm_record_id** update and the table refreshes. If CRM sync is disabled in `.env`, the API returns **400** (`CRM_SYNC_DISABLED`) and the toast shows the message.
+- **Close** — × button or Escape (native `<dialog>` behavior).
+
+![Lead detail and Resend to CRM](docs/screenshots/ui-05-detail-modal.png)
+
+---
+
+### Toasts (notifications)
+
+- Bottom-right messages for **success** (e.g. lead saved, resent to CRM), **errors** (validation, duplicate, network, CRM disabled), and general info.
+- They auto-hide after a few seconds.
+
+*Optional figure:* capture a toast after a successful submit or a duplicate error.
+
+![Toast: success or error example](docs/screenshots/ui-06-toast.png)
 
 ---
 
@@ -179,6 +276,18 @@ curl -s -X POST "http://127.0.0.1:8000/api/leads" \
 ```
 
 The HTTP `message` field is always `"Lead processed successfully"` in the current implementation, regardless of CRM being enabled (the processor may compute different internal messages for future use).
+
+---
+
+### List leads (dashboard and API)
+
+`GET /api/leads` optional query parameters:
+
+| Parameter | Description |
+|-----------|-------------|
+| `source` | Normalized source slug |
+| `crm_status` | Exact sheet value, e.g. `skipped`, `created` |
+| `date_from`, `date_to` | ISO calendar dates (`YYYY-MM-DD`), interpreted in UTC day bounds on the server |
 
 ---
 
@@ -236,9 +345,10 @@ pytest
 pytest -v
 pytest tests/test_api_leads.py -v
 pytest tests/test_lead_processor.py -v
+pytest tests/test_dashboard_api.py -v
 ```
 
-Coverage includes: happy-path API, validation errors, processor (including CRM and duplicates), and parts of Sheets / app error handling.
+Coverage includes: happy-path API, validation errors, processor (including CRM and duplicates), dashboard and list/resend routes, and parts of Sheets / app error handling.
 
 ---
 
