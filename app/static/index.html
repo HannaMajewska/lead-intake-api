@@ -11,7 +11,9 @@
 </head>
 <body>
   <div class="noise" aria-hidden="true"></div>
-  <header class="top">
+  <div class="ambient-glow" aria-hidden="true"></div>
+
+  <header class="top glass-header">
     <div class="brand">
       <span class="brand-mark" aria-hidden="true">&#9670;</span>
       <div>
@@ -20,129 +22,168 @@
       </div>
     </div>
     <div class="top-actions">
-      <button type="button" class="btn btn-ghost" id="toggle-form">+ Add lead</button>
-      <a class="btn btn-ghost" href="/docs" target="_blank" rel="noopener">API docs</a>
+      <button type="button" class="btn btn-primary btn-pill" id="toggle-form">+ Add lead</button>
+      <a class="btn btn-ghost btn-pill" href="/docs" target="_blank" rel="noopener">API docs</a>
     </div>
   </header>
 
-  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+  <div class="toast-host" aria-live="polite" aria-atomic="true">
+    <div id="toast" class="toast" role="status" hidden></div>
+  </div>
 
-  <section class="panel form-panel" id="form-panel" hidden>
-    <h2>New lead</h2>
-    <p class="hint">Duplicates (same email or phone already in the sheet) return <strong>409</strong> — watch the banner below.</p>
+  <main class="main">
+    <section class="filters-inline" aria-labelledby="filters-heading">
+      <div class="filters-header">
+        <h2 id="filters-heading" class="filters-title">Find leads</h2>
+        <p class="filters-sub">Filters query the server (Google Sheets). Column sorting is instant on loaded rows.</p>
+      </div>
+
+      <div class="filters-row filters-row-primary">
+        <label class="field-grow">
+          <span class="field-label">Source</span>
+          <input type="search" id="f-source" class="input-glass" placeholder="Type to filter, e.g. website_form" autocomplete="off" enterkeyhint="search" />
+        </label>
+        <label class="field-fixed">
+          <span class="field-label">CRM status</span>
+          <input type="hidden" id="f-status" value="" aria-describedby="filters-heading" />
+          <div class="custom-select" id="crm-status-wrap">
+            <button
+              type="button"
+              class="custom-select-trigger"
+              id="crm-status-trigger"
+              aria-haspopup="listbox"
+              aria-expanded="false"
+              aria-controls="crm-status-dropdown"
+            >
+              <span id="crm-status-display">All statuses</span>
+              <span class="custom-select-chevron" aria-hidden="true"></span>
+            </button>
+            <ul class="custom-select-dropdown" id="crm-status-dropdown" role="listbox" hidden>
+              <li role="option" class="custom-select-option" data-value="" tabindex="-1">All statuses</li>
+              <li role="option" class="custom-select-option" data-value="skipped" tabindex="-1">Pending sync (skipped)</li>
+              <li role="option" class="custom-select-option" data-value="created" tabindex="-1">In CRM (created)</li>
+              <li role="option" class="custom-select-option" data-value="error" tabindex="-1">Error</li>
+            </ul>
+          </div>
+        </label>
+      </div>
+
+      <div class="filters-row filters-row-dates">
+        <span class="field-label field-label-inline">Received</span>
+        <div class="date-presets" role="group" aria-label="Date range preset">
+          <button type="button" class="chip chip-date" data-preset="all" aria-pressed="true">All time</button>
+          <button type="button" class="chip chip-date" data-preset="7d" aria-pressed="false">Last 7 days</button>
+          <button type="button" class="chip chip-date" data-preset="30d" aria-pressed="false">Last 30 days</button>
+          <button type="button" class="chip chip-date" data-preset="custom" aria-pressed="false">Custom range…</button>
+        </div>
+        <div class="date-custom hidden" id="date-custom-wrap">
+          <label>
+            <span class="visually-hidden">From</span>
+            <input type="date" id="f-from" class="input-glass" aria-label="From date" />
+          </label>
+          <span class="date-sep" aria-hidden="true">→</span>
+          <label>
+            <span class="visually-hidden">To</span>
+            <input type="date" id="f-to" class="input-glass" aria-label="To date" />
+          </label>
+        </div>
+      </div>
+
+      <div class="filters-footer">
+        <span id="filter-status" class="filter-status" aria-live="polite"></span>
+        <div class="filters-footer-actions">
+          <button type="button" class="btn btn-ghost btn-sm" id="clear-filters">Reset filters</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="table-glass">
+      <div class="table-head">
+        <h2>Leads <span id="count" class="count"></span></h2>
+        <button type="button" class="btn btn-ghost btn-sm" id="refresh" title="Reload from server">Refresh</button>
+      </div>
+
+      <div id="bulk-bar" class="bulk-bar is-collapsed">
+        <span id="bulk-count" class="bulk-count">0 selected</span>
+        <div class="bulk-bar-actions">
+          <button type="button" class="btn btn-danger btn-sm btn-pill" id="bulk-delete">Delete selected</button>
+          <button type="button" class="btn btn-ghost btn-sm" id="bulk-clear">Clear selection</button>
+        </div>
+      </div>
+
+      <div class="table-scroll">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th scope="col" class="th-check">
+                <input type="checkbox" id="select-all" class="table-check" title="Select all visible" aria-label="Select all visible leads" />
+              </th>
+              <th scope="col">
+                <button type="button" class="th-sort" data-sort="created_at" aria-sort="descending">
+                  Received <span class="sort-indicator" aria-hidden="true"></span>
+                </button>
+              </th>
+              <th scope="col">
+                <button type="button" class="th-sort" data-sort="name" aria-sort="none">
+                  Name <span class="sort-indicator" aria-hidden="true"></span>
+                </button>
+              </th>
+              <th scope="col">
+                <button type="button" class="th-sort" data-sort="email" aria-sort="none">
+                  Email <span class="sort-indicator" aria-hidden="true"></span>
+                </button>
+              </th>
+              <th scope="col">
+                <button type="button" class="th-sort" data-sort="source" aria-sort="none">
+                  Source <span class="sort-indicator" aria-hidden="true"></span>
+                </button>
+              </th>
+              <th scope="col">
+                <button type="button" class="th-sort" data-sort="crm_status" aria-sort="none">
+                  Status <span class="sort-indicator" aria-hidden="true"></span>
+                </button>
+              </th>
+              <th scope="col" class="th-actions"><span class="th-actions-label">Action</span></th>
+            </tr>
+          </thead>
+          <tbody id="tbody">
+            <tr><td colspan="7" class="empty">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <dialog class="modal modal-glass" id="form-modal" aria-labelledby="form-modal-title">
+    <button type="button" class="modal-close" id="form-modal-close" aria-label="Close">×</button>
+    <h2 id="form-modal-title">New lead</h2>
+    <p class="hint">Duplicates (same email or phone already in the sheet) return <strong>409</strong> — a toast will explain.</p>
     <form id="lead-form" class="grid-form">
-      <label>Name<input name="name" required autocomplete="name" /></label>
-      <label>Email<input name="email" type="email" required autocomplete="email" /></label>
-      <label>Phone<input name="phone" required autocomplete="tel" /></label>
-      <label>Source<input name="source" required placeholder="e.g. website_form" /></label>
-      <label>Campaign<input name="campaign" placeholder="optional" /></label>
-      <label>City<input name="city" placeholder="optional" /></label>
-      <label class="full">Message<textarea name="message" rows="2" placeholder="optional"></textarea></label>
+      <label>Name<input name="name" required autocomplete="name" class="input-glass" /></label>
+      <label>Email<input name="email" type="email" required autocomplete="email" class="input-glass" /></label>
+      <label>Phone<input name="phone" required autocomplete="tel" class="input-glass" /></label>
+      <label>Source<input name="source" required placeholder="e.g. website_form" class="input-glass" /></label>
+      <label>Campaign<input name="campaign" placeholder="optional" class="input-glass" /></label>
+      <label>City<input name="city" placeholder="optional" class="input-glass" /></label>
+      <label class="full">Message<textarea name="message" rows="2" placeholder="optional" class="input-glass"></textarea></label>
       <div class="full form-actions">
-        <button type="submit" class="btn btn-primary">Submit lead</button>
+        <button type="submit" class="btn btn-primary btn-pill">Submit lead</button>
         <button type="button" class="btn btn-ghost" id="cancel-form">Cancel</button>
       </div>
     </form>
-  </section>
+  </dialog>
 
-  <section class="panel filters-panel" aria-labelledby="filters-heading">
-    <div class="filters-header">
-      <h2 id="filters-heading" class="filters-title">Find leads</h2>
-      <p class="filters-sub">Filters apply to the sheet on the server. Sorting below is instant on the loaded rows.</p>
-    </div>
-
-    <div class="filters-row filters-row-primary">
-      <label class="field-grow">
-        <span class="field-label">Source</span>
-        <input type="search" id="f-source" placeholder="Type to filter, e.g. website_form" autocomplete="off" enterkeyhint="search" />
-      </label>
-      <label class="field-fixed">
-        <span class="field-label">CRM status</span>
-        <select id="f-status" aria-describedby="filters-heading">
-          <option value="">All statuses</option>
-          <option value="skipped">Pending sync (skipped)</option>
-          <option value="created">In CRM (created)</option>
-          <option value="error">Error</option>
-        </select>
-      </label>
-    </div>
-
-    <div class="filters-row filters-row-dates">
-      <span class="field-label field-label-inline">Received</span>
-      <div class="date-presets" role="group" aria-label="Date range preset">
-        <button type="button" class="chip chip-date" data-preset="all" aria-pressed="true">All time</button>
-        <button type="button" class="chip chip-date" data-preset="7d" aria-pressed="false">Last 7 days</button>
-        <button type="button" class="chip chip-date" data-preset="30d" aria-pressed="false">Last 30 days</button>
-        <button type="button" class="chip chip-date" data-preset="custom" aria-pressed="false">Custom range…</button>
-      </div>
-      <div class="date-custom hidden" id="date-custom-wrap">
-        <label>
-          <span class="visually-hidden">From</span>
-          <input type="date" id="f-from" aria-label="From date" />
-        </label>
-        <span class="date-sep" aria-hidden="true">→</span>
-        <label>
-          <span class="visually-hidden">To</span>
-          <input type="date" id="f-to" aria-label="To date" />
-        </label>
-      </div>
-    </div>
-
-    <div class="filters-footer">
-      <span id="filter-status" class="filter-status" aria-live="polite"></span>
-      <div class="filters-footer-actions">
-        <button type="button" class="btn btn-ghost btn-sm" id="clear-filters">Reset filters</button>
-      </div>
-    </div>
-  </section>
-
-  <section class="panel table-wrap">
-    <div class="table-head">
-      <h2>Leads <span id="count" class="count"></span></h2>
-      <button type="button" class="btn btn-ghost btn-sm" id="refresh" title="Reload from server">Refresh</button>
-    </div>
-    <div class="table-scroll">
-      <table class="data-table">
-        <thead>
-          <tr>
-            <th scope="col">
-              <button type="button" class="th-sort" data-sort="created_at" aria-sort="descending">
-                Received <span class="sort-indicator" aria-hidden="true"></span>
-              </button>
-            </th>
-            <th scope="col">
-              <button type="button" class="th-sort" data-sort="name" aria-sort="none">
-                Name <span class="sort-indicator" aria-hidden="true"></span>
-              </button>
-            </th>
-            <th scope="col">
-              <button type="button" class="th-sort" data-sort="source" aria-sort="none">
-                Source <span class="sort-indicator" aria-hidden="true"></span>
-              </button>
-            </th>
-            <th scope="col">
-              <button type="button" class="th-sort" data-sort="crm_status" aria-sort="none">
-                Status <span class="sort-indicator" aria-hidden="true"></span>
-              </button>
-            </th>
-            <th scope="col" class="th-actions"><span class="visually-hidden">Actions</span></th>
-          </tr>
-        </thead>
-        <tbody id="tbody">
-          <tr><td colspan="5" class="empty">Loading…</td></tr>
-        </tbody>
-      </table>
-    </div>
-  </section>
-
-  <dialog class="modal" id="detail-modal" aria-labelledby="detail-title">
+  <dialog class="modal modal-glass" id="detail-modal" aria-labelledby="detail-title">
     <button type="button" class="modal-close" id="modal-close" aria-label="Close">×</button>
     <h2 id="detail-title">Lead</h2>
     <div id="detail-body" class="detail-card"></div>
     <div class="modal-actions">
-      <button type="button" class="btn btn-primary" id="btn-resend">Resend to CRM</button>
+      <button type="button" class="btn btn-primary btn-pill" id="btn-resend">Resend to CRM</button>
+      <button type="button" class="btn btn-danger btn-pill" id="btn-delete-detail">Delete lead</button>
     </div>
-    <p class="hint" id="resend-hint">Requires <code>ENABLE_CRM_SYNC=true</code> on the server.</p>
+    <p class="modal-footnote" id="resend-hint">
+      Requires <code>ENABLE_CRM_SYNC=true</code> on the server for <strong>Resend to CRM</strong>.
+    </p>
   </dialog>
 
   <script src="/static/app.js" type="module"></script>
