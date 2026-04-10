@@ -255,6 +255,95 @@ class GoogleSheetsAdapter:
                 message="Google credentials file was not found.",
             ) from exc
 
+    def _get_sheet_gid(self) -> int:
+        try:
+            service = self._build_service()
+            meta = (
+                service.spreadsheets()
+                .get(
+                    spreadsheetId=self.settings.google_sheet_id,
+                    fields="sheets(properties(sheetId,title))",
+                )
+                .execute()
+            )
+            for sheet in meta.get("sheets", []):
+                props = sheet.get("properties", {})
+                if props.get("title") == self.settings.google_sheet_name:
+                    return int(props["sheetId"])
+        except HttpError as exc:
+            raise self._map_http_error(exc, action="metadata") from exc
+        except FileNotFoundError as exc:
+            logger.exception(
+                "google_credentials_file_not_found",
+                extra={"credentials_path": self.settings.google_credentials_path},
+            )
+            raise AppError(
+                status_code=500,
+                error_code="GOOGLE_CREDENTIALS_FILE_NOT_FOUND",
+                message="Google credentials file was not found.",
+            ) from exc
+
+        raise AppError(
+            status_code=502,
+            error_code="GOOGLE_SHEETS_NOT_FOUND",
+            message=f"Sheet tab '{self.settings.google_sheet_name}' was not found.",
+        )
+
+    def delete_sheet_rows(self, sheet_rows_1based: list[int]) -> None:
+        if not sheet_rows_1based:
+            return
+
+        zero_based = sorted(
+            {r - 1 for r in sheet_rows_1based if r >= 2},
+            reverse=True,
+        )
+        if not zero_based:
+            return
+
+        try:
+            sheet_gid = self._get_sheet_gid()
+            service = self._build_service()
+            requests = [
+                {
+                    "deleteDimension": {
+                        "range": {
+                            "sheetId": sheet_gid,
+                            "dimension": "ROWS",
+                            "startIndex": idx,
+                            "endIndex": idx + 1,
+                        }
+                    }
+                }
+                for idx in zero_based
+            ]
+
+            (
+                service.spreadsheets()
+                .batchUpdate(
+                    spreadsheetId=self.settings.google_sheet_id,
+                    body={"requests": requests},
+                )
+                .execute()
+            )
+
+            logger.info(
+                "sheets_rows_deleted",
+                extra={"count": len(zero_based)},
+            )
+
+        except HttpError as exc:
+            raise self._map_http_error(exc, action="delete_rows") from exc
+        except FileNotFoundError as exc:
+            logger.exception(
+                "google_credentials_file_not_found",
+                extra={"credentials_path": self.settings.google_credentials_path},
+            )
+            raise AppError(
+                status_code=500,
+                error_code="GOOGLE_CREDENTIALS_FILE_NOT_FOUND",
+                message="Google credentials file was not found.",
+            ) from exc
+
     def append_lead_row(self, row: list[str]) -> SheetsAppendResult:
         try:
             self.ensure_header()
