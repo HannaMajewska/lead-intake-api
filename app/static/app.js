@@ -1,6 +1,8 @@
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 
+const COLS = 7;
+
 const api = (path, opts = {}) =>
   fetch(path, {
     headers: { "Content-Type": "application/json", ...opts.headers },
@@ -9,9 +11,10 @@ const api = (path, opts = {}) =>
 
 function showToast(message, type = "info") {
   const el = $("#toast");
+  const safeType = ["success", "error", "info"].includes(type) ? type : "info";
   el.textContent = message;
   el.hidden = false;
-  el.className = `toast ${type}`;
+  el.className = `toast toast--${safeType}`;
   clearTimeout(showToast._t);
   showToast._t = setTimeout(() => {
     el.hidden = true;
@@ -51,11 +54,73 @@ function toYMD(d) {
   return `${y}-${m}-${day}`;
 }
 
+const CRM_STATUS_LABELS = {
+  "": "All statuses",
+  skipped: "Pending sync (skipped)",
+  created: "In CRM (created)",
+  error: "Error",
+};
+
+function setCrmFilterValue(value) {
+  const hidden = $("#f-status");
+  if (hidden) hidden.value = value;
+  const display = $("#crm-status-display");
+  if (display) {
+    display.textContent = CRM_STATUS_LABELS[value] ?? value ?? "All statuses";
+  }
+  $$(".custom-select-option").forEach((el) => {
+    el.setAttribute("aria-selected", el.dataset.value === value ? "true" : "false");
+  });
+}
+
+function initCrmStatusDropdown() {
+  const wrap = $("#crm-status-wrap");
+  const trigger = $("#crm-status-trigger");
+  const list = $("#crm-status-dropdown");
+  if (!wrap || !trigger || !list) return;
+
+  function closeList() {
+    list.hidden = true;
+    trigger.setAttribute("aria-expanded", "false");
+  }
+
+  function openList() {
+    list.hidden = false;
+    trigger.setAttribute("aria-expanded", "true");
+  }
+
+  trigger.addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (list.hidden) openList();
+    else closeList();
+  });
+
+  list.addEventListener("click", (e) => {
+    const opt = e.target.closest(".custom-select-option");
+    if (!opt) return;
+    const val = opt.dataset.value ?? "";
+    setCrmFilterValue(val);
+    closeList();
+    scheduleFetch(0);
+  });
+
+  document.addEventListener("click", (e) => {
+    if (!wrap.contains(e.target)) closeList();
+  });
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") closeList();
+  });
+}
+
 /** @type {string} */
 let currentPreset = "all";
 let fetchTimer = null;
 /** @type {Array<Record<string, string>>} */
 let leadsCache = [];
+
+/** @type {Set<string>} */
+const selectedIds = new Set();
 
 const sortState = {
   key: "created_at",
@@ -65,11 +130,24 @@ const sortState = {
 const defaultSortDir = {
   created_at: "desc",
   name: "asc",
+  email: "asc",
   source: "asc",
   crm_status: "asc",
 };
 
 let selectedLeadId = null;
+
+function openFormModal() {
+  const dlg = $("#form-modal");
+  if (typeof dlg.showModal === "function") dlg.showModal();
+  else dlg.setAttribute("open", "");
+}
+
+function closeFormModal() {
+  const dlg = $("#form-modal");
+  if (typeof dlg.close === "function") dlg.close();
+  else dlg.removeAttribute("open");
+}
 
 function setFilterLoading(isLoading) {
   const el = $("#filter-status");
@@ -80,10 +158,15 @@ function setFilterSummary(text) {
   $("#filter-status").textContent = text;
 }
 
+function getVisibleSortedLeads() {
+  return sortLeads(leadsCache, sortState.key, sortState.dir);
+}
+
 function sortLabel() {
   const labels = {
     created_at: "Received",
     name: "Name",
+    email: "Email",
     source: "Source",
     crm_status: "Status",
   };
@@ -174,9 +257,35 @@ function updateSortHeaders() {
   });
 }
 
+function updateBulkBar() {
+  const bar = $("#bulk-bar");
+  const n = selectedIds.size;
+  if (n === 0) {
+    bar.classList.remove("is-active");
+    bar.classList.add("is-collapsed");
+    return;
+  }
+  bar.classList.remove("is-collapsed");
+  bar.classList.add("is-active");
+  $("#bulk-count").textContent = `${n} selected`;
+}
+
+function syncSelectAllCheckbox() {
+  const el = $("#select-all");
+  const visible = getVisibleSortedLeads().map((r) => r.lead_id);
+  if (!visible.length) {
+    el.checked = false;
+    el.indeterminate = false;
+    return;
+  }
+  const n = visible.filter((id) => selectedIds.has(id)).length;
+  el.checked = n === visible.length && n > 0;
+  el.indeterminate = n > 0 && n < visible.length;
+}
+
 function renderTable() {
   const tbody = $("#tbody");
-  const sorted = sortLeads(leadsCache, sortState.key, sortState.dir);
+  const sorted = getVisibleSortedLeads();
 
   if (!sorted.length) {
     const hasFilters = Boolean(
@@ -186,10 +295,13 @@ function renderTable() {
         $("#f-to").value ||
         currentPreset !== "all"
     );
-    tbody.innerHTML = `<tr><td colspan="5" class="empty">${
+    tbody.innerHTML = `<tr><td colspan="${COLS}" class="empty">${
       hasFilters ? "No leads match these filters." : "No leads loaded yet."
     }</td></tr>`;
     $("#count").textContent = "(0)";
+    selectedIds.clear();
+    updateBulkBar();
+    syncSelectAllCheckbox();
     setFilterSummary(
       hasFilters
         ? "Try a wider date range, another status, or reset filters."
@@ -202,18 +314,32 @@ function renderTable() {
   setFilterSummary(`Showing ${sorted.length} lead${sorted.length === 1 ? "" : "s"} · ${sortLabel()}`);
 
   tbody.innerHTML = sorted
-    .map(
-      (row) => `
-      <tr data-id="${escapeHtml(row.lead_id)}">
+    .map((row) => {
+      const id = row.lead_id;
+      const checked = selectedIds.has(id) ? "checked" : "";
+      return `
+      <tr data-id="${escapeHtml(id)}">
+        <td class="td-check">
+          <input type="checkbox" class="table-check row-check" data-id="${escapeHtml(id)}" ${checked} aria-label="Select ${escapeHtml(row.name || id)}" />
+        </td>
         <td>${formatDate(row.created_at)}</td>
         <td>${escapeHtml(row.name)}</td>
+        <td class="table-col-email" title="${escapeHtml(row.email)}">${escapeHtml(row.email)}</td>
         <td><code>${escapeHtml(row.source)}</code></td>
         <td>${statusBadge(row.crm_status)}</td>
-        <td><button type="button" class="linkish open-detail">View</button></td>
+        <td class="td-actions">
+          <span class="row-actions">
+            <button type="button" class="linkish open-detail">View</button>
+            <button type="button" class="linkish linkish-danger btn-delete-row" data-id="${escapeHtml(id)}">Delete</button>
+          </span>
+        </td>
       </tr>
-    `
-    )
+    `;
+    })
     .join("");
+
+  syncSelectAllCheckbox();
+  updateBulkBar();
 }
 
 async function loadLeads() {
@@ -230,14 +356,14 @@ async function loadLeads() {
   const q = params.toString();
   const url = `/api/leads${q ? `?${q}` : ""}`;
   const tbody = $("#tbody");
-  tbody.innerHTML = `<tr><td colspan="5" class="empty">Loading…</td></tr>`;
+  tbody.innerHTML = `<tr><td colspan="${COLS}" class="empty">Loading…</td></tr>`;
   setFilterLoading(true);
 
   try {
     const res = await api(url);
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
-      tbody.innerHTML = `<tr><td colspan="5" class="empty">Could not load leads.</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="${COLS}" class="empty">Could not load leads.</td></tr>`;
       showToast(data.message || `Error ${res.status}`, "error");
       $("#count").textContent = "";
       leadsCache = [];
@@ -246,16 +372,64 @@ async function loadLeads() {
       return;
     }
     leadsCache = data.items || [];
+    const validIds = new Set(leadsCache.map((r) => r.lead_id));
+    [...selectedIds].forEach((id) => {
+      if (!validIds.has(id)) selectedIds.delete(id);
+    });
     setFilterLoading(false);
     updateSortHeaders();
     renderTable();
   } catch (e) {
-    tbody.innerHTML = `<tr><td colspan="5" class="empty">Network error.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="${COLS}" class="empty">Network error.</td></tr>`;
     showToast(String(e.message || e), "error");
     $("#count").textContent = "";
     leadsCache = [];
     setFilterSummary("");
     setFilterLoading(false);
+  }
+}
+
+async function deleteLeadById(leadId) {
+  if (!leadId) return;
+  if (!confirm("Delete this lead from the sheet? This cannot be undone.")) return;
+  try {
+    const res = await api(`/api/leads/${encodeURIComponent(leadId)}`, { method: "DELETE" });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      showToast(data.message || `Delete failed (${res.status})`, "error");
+      return;
+    }
+    selectedIds.delete(leadId);
+    showToast(data.message || "Lead deleted", "success");
+    scheduleFetch(0);
+  } catch (err) {
+    showToast(String(err.message || err), "error");
+  }
+}
+
+async function bulkDeleteSelected() {
+  const ids = [...selectedIds];
+  if (!ids.length) return;
+  if (
+    !confirm(`Delete ${ids.length} lead(s) from the sheet? This cannot be undone.`)
+  ) {
+    return;
+  }
+  try {
+    const res = await api("/api/leads/bulk-delete", {
+      method: "POST",
+      body: JSON.stringify({ lead_ids: ids }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      showToast(data.message || `Bulk delete failed (${res.status})`, "error");
+      return;
+    }
+    selectedIds.clear();
+    showToast(data.message || "Leads deleted", "success");
+    scheduleFetch(0);
+  } catch (err) {
+    showToast(String(err.message || err), "error");
   }
 }
 
@@ -279,7 +453,6 @@ $$(".chip-date").forEach((btn) => {
 });
 
 $("#f-source").addEventListener("input", () => scheduleFetch(320));
-$("#f-status").addEventListener("change", () => scheduleFetch(0));
 $("#f-from").addEventListener("change", () => {
   if (currentPreset !== "custom") {
     currentPreset = "custom";
@@ -301,9 +474,36 @@ $("#f-to").addEventListener("change", () => {
   scheduleFetch(0);
 });
 
+$("#select-all").addEventListener("change", (e) => {
+  const visible = getVisibleSortedLeads().map((r) => r.lead_id);
+  if (e.target.checked) {
+    visible.forEach((id) => selectedIds.add(id));
+  } else {
+    visible.forEach((id) => selectedIds.delete(id));
+  }
+  renderTable();
+});
+
+$("#tbody").addEventListener("change", (e) => {
+  const cb = e.target.closest(".row-check");
+  if (!cb) return;
+  const id = cb.dataset.id;
+  if (!id) return;
+  if (cb.checked) selectedIds.add(id);
+  else selectedIds.delete(id);
+  syncSelectAllCheckbox();
+  updateBulkBar();
+});
+
+$("#bulk-delete").addEventListener("click", () => bulkDeleteSelected());
+$("#bulk-clear").addEventListener("click", () => {
+  selectedIds.clear();
+  renderTable();
+});
+
 $("#clear-filters").addEventListener("click", () => {
   $("#f-source").value = "";
-  $("#f-status").value = "";
+  setCrmFilterValue("");
   currentPreset = "all";
   $$(".chip-date").forEach((b) => {
     b.setAttribute("aria-pressed", b.dataset.preset === "all" ? "true" : "false");
@@ -313,6 +513,7 @@ $("#clear-filters").addEventListener("click", () => {
   $("#date-custom-wrap").classList.add("hidden");
   sortState.key = "created_at";
   sortState.dir = "desc";
+  selectedIds.clear();
   updateSortHeaders();
   scheduleFetch(0);
 });
@@ -350,6 +551,12 @@ function closeModal() {
 }
 
 $("#tbody").addEventListener("click", async (e) => {
+  const delBtn = e.target.closest(".btn-delete-row");
+  if (delBtn) {
+    e.preventDefault();
+    await deleteLeadById(delBtn.dataset.id);
+    return;
+  }
   const btn = e.target.closest(".open-detail");
   if (!btn) return;
   const tr = btn.closest("tr");
@@ -393,12 +600,19 @@ $("#btn-resend").addEventListener("click", async () => {
   }
 });
 
-$("#toggle-form").addEventListener("click", () => {
-  const p = $("#form-panel");
-  p.hidden = !p.hidden;
+$("#btn-delete-detail").addEventListener("click", async () => {
+  if (!selectedLeadId) return;
+  const id = selectedLeadId;
+  closeModal();
+  await deleteLeadById(id);
 });
-$("#cancel-form").addEventListener("click", () => {
-  $("#form-panel").hidden = true;
+
+$("#toggle-form").addEventListener("click", () => openFormModal());
+$("#cancel-form").addEventListener("click", () => closeFormModal());
+$("#form-modal-close").addEventListener("click", () => closeFormModal());
+$("#form-modal").addEventListener("cancel", (e) => {
+  e.preventDefault();
+  closeFormModal();
 });
 
 $("#lead-form").addEventListener("submit", async (e) => {
@@ -430,12 +644,14 @@ $("#lead-form").addEventListener("submit", async (e) => {
     }
     showToast(`Saved · ${data.lead_id}`, "success");
     e.target.reset();
-    $("#form-panel").hidden = true;
+    closeFormModal();
     scheduleFetch(0);
   } catch (err) {
     showToast(String(err.message || err), "error");
   }
 });
 
+initCrmStatusDropdown();
+setCrmFilterValue("");
 updateSortHeaders();
 loadLeads();
