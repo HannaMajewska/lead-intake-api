@@ -153,7 +153,8 @@ Figures in the subsections below illustrate layout, header, new-lead flow, filte
 
 - **Full page** — header, **Find leads** filters, **Leads** table (row selection and bulk delete), and (when open) the **New lead** dialog or lead detail dialog.
 
-<img width="1900" height="963" alt="Screenshot 2026-04-11 at 01 20 51" src="https://github.com/user-attachments/assets/59b194e3-00c8-4ff3-913a-f7bf7940cb27" />
+<img width="1900" height="959" alt="Screenshot 2026-04-12 at 01 19 54" src="https://github.com/user-attachments/assets/441a24fa-c904-4331-b08b-2042afef5b12" />
+
 
 ---
 
@@ -163,7 +164,7 @@ Figures in the subsections below illustrate layout, header, new-lead flow, filte
 - **+ Add lead** — opens the **New lead** dialog (modal).
 - **API docs** — opens FastAPI Swagger (`/docs`) in a new tab.
 
-<img width="1900" height="116" alt="Screenshot 2026-04-11 at 01 21 44" src="https://github.com/user-attachments/assets/03c5cb07-a707-4b2e-ba3b-1bc906247036" />
+<img width="1900" height="132" alt="Screenshot 2026-04-12 at 01 12 08" src="https://github.com/user-attachments/assets/2b7767cc-6323-4588-85a3-b65698d6c89e" />
 
 
 
@@ -177,7 +178,8 @@ Figures in the subsections below illustrate layout, header, new-lead flow, filte
 - **Duplicates** — if the email or phone already exists in the sheet, the API returns **409**; the UI shows a toast with the error message (duplicates never get a new row).
 - **Submit lead** — `POST /api/leads`; on success, a toast shows the new `lead_id` and the table refreshes.
 
-<img width="1900" height="962" alt="Screenshot 2026-04-11 at 01 23 33" src="https://github.com/user-attachments/assets/8858634a-0755-4c98-ba83-f92bb7c9bfbb" />
+<img width="1900" height="961" alt="Screenshot 2026-04-12 at 01 13 06" src="https://github.com/user-attachments/assets/301a7472-80cb-4478-9f53-27772d051b4d" />
+
 
 
 
@@ -196,7 +198,8 @@ Short help text explains that **filters hit the server** (Google Sheets via the 
 - **Status line** (under the chips) — shows loading state, then text such as how many leads are shown and the active sort (e.g. “Received: newest first”).
 - **Reset filters** — clears source, status, date presets (back to **All time**), and restores default table sort (**Received**, newest first).
 
-<img width="1900" height="261" alt="Screenshot 2026-04-11 at 01 24 07" src="https://github.com/user-attachments/assets/d407f1c0-71d9-4171-9363-8aa85693bd93" />
+<img width="1900" height="216" alt="Screenshot 2026-04-12 at 01 13 43" src="https://github.com/user-attachments/assets/0df294f3-c57f-4664-8e5a-5357dd94f041" />
+
 
 
 
@@ -210,7 +213,7 @@ Short help text explains that **filters hit the server** (Google Sheets via the 
 - **Sortable headers** — click **Received**, **Name**, **Email**, **Source**, or **Status** to sort. The active column shows **up** or **down** arrows; inactive columns show a faint sort hint (Unicode U+2195 in the UI). First click on **Received** keeps **newest first** by default; text columns default to A→Z, then toggle direction on repeated clicks.
 - **View** — loads the row from `GET /api/leads/{lead_id}` and opens the detail modal (not only the visible row snapshot).
 
-<img width="1900" height="609" alt="Screenshot 2026-04-11 at 01 24 52" src="https://github.com/user-attachments/assets/6859bdac-90e0-4bcc-b0a0-784d25376c0c" />
+<img width="1900" height="750" alt="Screenshot 2026-04-12 at 01 19 27" src="https://github.com/user-attachments/assets/f7a9e85b-dae6-4fd7-8801-c0275357563d" />
 
 
 
@@ -234,7 +237,8 @@ Short help text explains that **filters hit the server** (Google Sheets via the 
 - Fixed **bottom-right**: one glass **toast host**; the message line uses a slim **type accent** (info / success / error) for saves, resend, single and bulk deletes, validation, duplicates, network failures, CRM disabled, and other API errors.
 - Auto-hide after about **five seconds**.
 
-<img width="1900" height="952" alt="Screenshot 2026-04-11 at 01 26 34" src="https://github.com/user-attachments/assets/d6c93a2f-7cb0-431c-842e-e1cbff4b6a86" />
+<img width="1900" height="959" alt="Screenshot 2026-04-12 at 01 21 07" src="https://github.com/user-attachments/assets/781c453c-c18a-4f16-b98e-24a482c78e5b" />
+
 
 
 ---
