@@ -1,6 +1,24 @@
 # Lead Intake API
 
-A FastAPI backend that accepts lead payloads as JSON, validates and normalizes fields, appends a row to Google Sheets, and optionally invokes a CRM adapter (currently **mock only**). It also serves a small **Lead operations** web console at `/` for browsing and managing rows without using `curl`. Responses are JSON with explicit status and error codes.
+## About
+
+**Lead Intake** is a small operations hub for teams that capture leads from websites, campaigns, or internal tools and need a **single, transparent place** to land that data without standing up a full CRM or database project on day one.
+
+**Business problems it helps solve**
+
+- **Central intake** — Turn scattered form submissions or partner feeds into **one structured pipeline**: every lead becomes a row with consistent fields (contact, source, campaign, timestamps, CRM sync state).
+- **Operational visibility** — Operators can **search, filter, sort, open details, and clean up** rows (including bulk delete) from a browser, instead of editing the spreadsheet by hand or writing one-off scripts.
+- **Lightweight truth store** — **Google Sheets** acts as the team’s shared workbook: easy to audit, export, and share, while the API enforces **validation**, **normalization**, and **duplicate rules** (same email or phone cannot create a second row).
+- **CRM readiness** — Optional **CRM sync** (currently a **mock** adapter) models how real integration would work: status and record id columns update when sync runs or when a lead is **resent to CRM** after a fix.
+- **Integration-friendly surface** — A clear **JSON API** lets forms, landing pages, or middleware **POST leads programmatically** and receive explicit success or error codes—suitable for glue code, Zapier-style automation, or an internal gateway.
+
+**Who it is for**
+
+Small and mid-sized teams, agencies, or product squads that want **reliable lead capture + a simple console**, already live in **Google Workspace**, and may later plug in a real CRM—without rewriting the intake contract.
+
+---
+
+**What it is technically:** A FastAPI backend that accepts lead payloads as JSON, validates and normalizes fields, appends a row to Google Sheets, and optionally invokes a CRM adapter (currently **mock only**). It also serves a **Lead operations** web console at `/` for browsing and managing rows without using `curl`. Responses are JSON with explicit status and error codes.
 
 ---
 
