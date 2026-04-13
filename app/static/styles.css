@@ -26,6 +26,10 @@
   --font-mono: "IBM Plex Mono", ui-monospace, monospace;
   --blur: 16px;
   --radius-glass: 16px;
+  --radius-btn: 10px;
+  /* CRM dropdown (open): above table, modals (45), toasts (50); trigger sits one step below */
+  --z-crm-dropdown: 50000;
+  --z-crm-dropdown-trigger: 49990;
 }
 
 *,
@@ -134,7 +138,8 @@ body {
 /* —— Filters: no card, sits on page bg —— */
 .filters-inline {
   position: relative;
-  z-index: 1;
+  /* Above .table-glass so CRM dropdown is not covered by the table card */
+  z-index: 3;
   padding: 1.5rem 0 1.25rem;
   margin: 0;
   background: none;
@@ -211,6 +216,12 @@ body {
   width: 100%;
 }
 
+/* While open: whole control stacks above the leads table (list is portaled to body) */
+#crm-status-wrap.is-dropdown-open {
+  position: relative;
+  z-index: var(--z-crm-dropdown-trigger);
+}
+
 .custom-select-trigger {
   position: relative;
   width: 100%;
@@ -262,24 +273,32 @@ body {
   border-color: var(--accent);
 }
 
+/* Position is set via JS (fixed to viewport) so list stays above .table-glass (backdrop-filter stacking) */
 .custom-select-dropdown {
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: calc(100% + 6px);
-  z-index: 40;
+  box-sizing: border-box;
   margin: 0;
   padding: 0.4rem;
   list-style: none;
   border-radius: 12px;
-  background: rgba(23, 30, 42, 0.96);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid var(--glass-border-bright);
+  background: rgba(18, 24, 34, 0.98);
+  backdrop-filter: blur(22px);
+  -webkit-backdrop-filter: blur(22px);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  /* Light elevation: reads “above” the table without a heavy drop shadow */
   box-shadow:
-    0 0 0 1px rgba(255, 255, 255, 0.04) inset,
-    0 16px 48px rgba(0, 0, 0, 0.45),
-    0 0 40px rgba(38, 100, 235, 0.08);
+    0 0 0 1px rgba(255, 255, 255, 0.07) inset,
+    0 4px 16px rgba(0, 0, 0, 0.14),
+    0 16px 40px rgba(0, 0, 0, 0.2),
+    0 0 48px rgba(38, 100, 235, 0.06);
+}
+
+.custom-select-dropdown.is-anchor-fixed {
+  position: fixed;
+  z-index: var(--z-crm-dropdown);
+  max-height: min(50vh, 320px);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  isolation: isolate;
 }
 
 .custom-select-option {
@@ -588,12 +607,60 @@ select:focus {
 }
 
 .table-check {
+  -webkit-appearance: none;
+  appearance: none;
+  position: relative;
   width: 1.05rem;
   height: 1.05rem;
   margin: 0;
   vertical-align: middle;
-  accent-color: var(--accent);
+  flex-shrink: 0;
   cursor: pointer;
+  border-radius: 5px;
+  border: 1px solid var(--glass-border-bright);
+  background: var(--glass-bg);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow: inset 0 1px 0 var(--glass-highlight);
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.table-check:hover {
+  border-color: rgba(38, 100, 235, 0.35);
+  background: var(--accent-fill-soft);
+}
+
+.table-check:checked {
+  background: var(--accent-fill-soft);
+  border-color: rgba(38, 100, 235, 0.42);
+  box-shadow:
+    inset 0 1px 0 var(--glass-highlight),
+    0 0 0 1px rgba(38, 100, 235, 0.12);
+}
+
+.table-check:checked::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 45%;
+  width: 0.22rem;
+  height: 0.4rem;
+  border: solid var(--text);
+  border-width: 0 1.75px 1.75px 0;
+  transform: translate(-50%, -50%) rotate(45deg);
+  opacity: 0.85;
+}
+
+.table-check:focus {
+  outline: none;
+}
+
+.table-check:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 .table-col-email {
@@ -637,12 +704,22 @@ select:focus {
   cursor: pointer;
   text-align: left;
   border-radius: 0;
-  transition: color 0.15s, background 0.15s;
+  transition: color 0.15s ease;
 }
 
 .th-sort:hover {
   color: var(--text);
-  background: var(--accent-fill-soft);
+  background: transparent;
+}
+
+.th-sort:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+.th-sort:focus:not(:focus-visible) {
+  outline: none;
 }
 
 .th-sort[aria-sort="ascending"],
@@ -650,20 +727,46 @@ select:focus {
   color: var(--accent);
 }
 
-.sort-indicator::before {
-  content: "\2195";
-  opacity: 0.35;
-  font-size: 0.85em;
+.sort-indicator {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  min-width: 1.1em;
 }
 
+/* Neutral: up/down arrows — reads clearly as “sortable” */
+.sort-indicator::before {
+  content: "\2191\2193";
+  display: inline-block;
+  font-size: 0.72em;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.12em;
+  opacity: 0.62;
+  color: var(--muted);
+}
+
+.th-sort:hover .sort-indicator::before {
+  opacity: 0.92;
+  color: var(--text);
+}
+
+/* Active: filled triangles — obvious direction */
 .th-sort[aria-sort="ascending"] .sort-indicator::before {
-  content: "↑";
+  content: "\25B2";
+  letter-spacing: 0;
+  font-size: 0.68em;
+  line-height: 1;
   opacity: 1;
   color: var(--accent);
 }
 
 .th-sort[aria-sort="descending"] .sort-indicator::before {
-  content: "↓";
+  content: "\25BC";
+  letter-spacing: 0;
+  font-size: 0.68em;
+  line-height: 1;
   opacity: 1;
   color: var(--accent);
 }
@@ -769,10 +872,38 @@ select:focus {
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
+}
+
+.grid-form .form-label-text {
   font-size: 0.75rem;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--muted);
+}
+
+.grid-form .label-required {
+  color: var(--danger);
+  font-weight: 700;
+  margin-left: 0.12em;
+}
+
+.grid-form .label-optional {
+  text-transform: none;
+  letter-spacing: 0.03em;
+  font-weight: 500;
+  font-size: 0.82em;
+  color: rgba(139, 150, 168, 0.88);
+}
+
+#lead-form input::placeholder,
+#lead-form textarea::placeholder {
+  color: rgba(139, 150, 168, 0.38);
+  opacity: 1;
+}
+
+#lead-form input:focus::placeholder,
+#lead-form textarea:focus::placeholder {
+  color: rgba(139, 150, 168, 0.22);
 }
 
 .grid-form .full {
@@ -788,7 +919,7 @@ select:focus {
 .btn {
   font: inherit;
   cursor: pointer;
-  border-radius: 10px;
+  border-radius: var(--radius-btn);
   padding: 0.55rem 1rem;
   border: 1px solid var(--glass-border-bright);
   text-decoration: none;
@@ -800,11 +931,56 @@ select:focus {
   align-items: center;
   justify-content: center;
   gap: 0.35rem;
+  transition:
+    background 0.16s ease,
+    border-color 0.16s ease,
+    color 0.16s ease,
+    box-shadow 0.16s ease;
 }
 
-.btn-pill {
-  border-radius: 999px;
-  padding: 0.55rem 1.25rem;
+.btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.btn:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* Borderless control actions (e.g. refresh) — same radius token, no frame */
+.btn-icon {
+  border: none;
+  background: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  box-shadow: none;
+  color: var(--muted);
+  padding: 0.45rem;
+  min-width: 2.35rem;
+  min-height: 2.35rem;
+}
+
+.btn-icon:hover {
+  color: var(--accent);
+  background: var(--accent-fill-soft);
+  border: none;
+}
+
+.btn-icon:active {
+  background: var(--accent-fill-hover);
+}
+
+.btn-sm.btn-icon {
+  padding: 0.4rem;
+  min-width: 2.1rem;
+  min-height: 2.1rem;
+}
+
+.btn-icon svg {
+  width: 1.125rem;
+  height: 1.125rem;
+  display: block;
+  flex-shrink: 0;
 }
 
 .btn-primary {
@@ -874,9 +1050,41 @@ select:focus {
   border: 1px solid var(--glass-border-bright);
   box-shadow:
     0 0 0 1px rgba(255, 255, 255, 0.05) inset,
-    0 20px 56px rgba(0, 0, 0, 0.5),
-    0 0 100px rgba(38, 100, 235, 0.1);
+    0 20px 56px rgba(0, 0, 0, 0.5);
   pointer-events: auto;
+}
+
+/* Toast dock tint follows message kind */
+.toast-host:has(.toast--info:not([hidden])) {
+  border-color: rgba(38, 100, 235, 0.4);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.05) inset,
+    0 20px 56px rgba(0, 0, 0, 0.5),
+    0 0 88px rgba(38, 100, 235, 0.16);
+}
+
+.toast-host:has(.toast--success:not([hidden])) {
+  border-color: rgba(61, 158, 122, 0.38);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.05) inset,
+    0 20px 56px rgba(0, 0, 0, 0.5),
+    0 0 80px rgba(61, 158, 122, 0.14);
+}
+
+.toast-host:has(.toast--delete:not([hidden])) {
+  border-color: rgba(199, 61, 46, 0.42);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.05) inset,
+    0 20px 56px rgba(0, 0, 0, 0.5),
+    0 0 80px rgba(231, 111, 81, 0.14);
+}
+
+.toast-host:has(.toast--error:not([hidden])) {
+  border-color: rgba(231, 111, 81, 0.48);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.05) inset,
+    0 20px 56px rgba(0, 0, 0, 0.5),
+    0 0 88px rgba(231, 111, 81, 0.16);
 }
 
 .toast {
@@ -907,11 +1115,17 @@ select:focus {
 }
 
 .toast--info {
-  border-left-color: rgba(38, 100, 235, 0.75);
+  border-left-color: rgba(38, 100, 235, 0.85);
+  color: #e4ecfc;
 }
 
 .toast--success {
   border-left-color: rgba(61, 158, 122, 0.9);
+}
+
+.toast--delete {
+  border-left-color: rgba(199, 61, 46, 0.92);
+  color: #f0e6e4;
 }
 
 .toast--error {

@@ -11,7 +11,7 @@ const api = (path, opts = {}) =>
 
 function showToast(message, type = "info") {
   const el = $("#toast");
-  const safeType = ["success", "error", "info"].includes(type) ? type : "info";
+  const safeType = ["success", "error", "info", "delete"].includes(type) ? type : "info";
   el.textContent = message;
   el.hidden = false;
   el.className = `toast toast--${safeType}`;
@@ -79,14 +79,45 @@ function initCrmStatusDropdown() {
   const list = $("#crm-status-dropdown");
   if (!wrap || !trigger || !list) return;
 
+  function syncCrmDropdownPosition() {
+    if (list.hidden) return;
+    const r = trigger.getBoundingClientRect();
+    const gap = 6;
+    list.style.left = `${r.left}px`;
+    list.style.top = `${r.bottom + gap}px`;
+    list.style.width = `${r.width}px`;
+  }
+
   function closeList() {
     list.hidden = true;
+    list.classList.remove("is-anchor-fixed");
+    list.style.left = "";
+    list.style.top = "";
+    list.style.width = "";
     trigger.setAttribute("aria-expanded", "false");
+    wrap.classList.remove("is-dropdown-open");
+    if (list.parentElement === document.body) {
+      wrap.appendChild(list);
+    }
   }
 
   function openList() {
     list.hidden = false;
+    list.classList.add("is-anchor-fixed");
     trigger.setAttribute("aria-expanded", "true");
+    wrap.classList.add("is-dropdown-open");
+    /* Body layer: always above .table-glass / filters stacking, no ancestor clip */
+    if (list.parentElement !== document.body) {
+      document.body.appendChild(list);
+    }
+    syncCrmDropdownPosition();
+    requestAnimationFrame(() => {
+      syncCrmDropdownPosition();
+    });
+  }
+
+  function onViewportChange() {
+    if (!list.hidden) syncCrmDropdownPosition();
   }
 
   trigger.addEventListener("click", (e) => {
@@ -105,12 +136,17 @@ function initCrmStatusDropdown() {
   });
 
   document.addEventListener("click", (e) => {
-    if (!wrap.contains(e.target)) closeList();
+    if (wrap.contains(e.target)) return;
+    if (list.contains(e.target)) return;
+    if (!list.hidden) closeList();
   });
 
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") closeList();
   });
+
+  window.addEventListener("scroll", onViewportChange, true);
+  window.addEventListener("resize", onViewportChange);
 }
 
 /** @type {string} */
@@ -400,7 +436,7 @@ async function deleteLeadById(leadId) {
       return;
     }
     selectedIds.delete(leadId);
-    showToast(data.message || "Lead deleted", "success");
+    showToast(data.message || "Lead deleted", "delete");
     scheduleFetch(0);
   } catch (err) {
     showToast(String(err.message || err), "error");
@@ -426,7 +462,7 @@ async function bulkDeleteSelected() {
       return;
     }
     selectedIds.clear();
-    showToast(data.message || "Leads deleted", "success");
+    showToast(data.message || "Leads deleted", "delete");
     scheduleFetch(0);
   } catch (err) {
     showToast(String(err.message || err), "error");
